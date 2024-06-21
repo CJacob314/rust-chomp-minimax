@@ -10,20 +10,17 @@ lazy_static::lazy_static! {
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct BoardState {
 	inner: Vec<Vec<bool>>,
-	is_max_player: bool,
 }
 
 pub enum WinState {
-	MaxWin,
-	MaxLoss,
+	Loss,
 	NoWinner,
 }
 
 impl From<WinState> for i32 {
 	fn from(value: WinState) -> Self {
 		match value {
-			WinState::MaxWin => 1,
-			WinState::MaxLoss => -1,
+			WinState::Loss => -1,
 			WinState::NoWinner => 0,
 		}
 	}
@@ -33,13 +30,13 @@ impl WinState {
 	pub fn ended(&self) -> bool {
 		match &self {
 			WinState::NoWinner => false,
-			WinState::MaxLoss | WinState::MaxWin => true,
+			WinState::Loss => true,
 		}
 	}
 }
 
 impl BoardState {
-	pub fn new(width: usize, height: usize, max_first: bool) -> Self {
+	pub fn new(width: usize, height: usize) -> Self {
 		let mut inner = Vec::with_capacity(width);
 		inner.resize_with(width, || {
 			let mut nested = Vec::with_capacity(height);
@@ -47,10 +44,7 @@ impl BoardState {
 			nested
 		});
 
-		BoardState {
-			inner,
-			is_max_player: max_first,
-		}
+		BoardState { inner }
 	}
 
 	pub fn win_state(&self) -> WinState {
@@ -64,11 +58,7 @@ impl BoardState {
 			}
 		}
 		// Only the poisonous piece remains
-		if self.is_max_player {
-			WinState::MaxLoss
-		} else {
-			WinState::MaxWin
-		}
+		WinState::Loss
 	}
 
 	pub fn minimax(&mut self) -> (i32, Option<(usize, usize)>) {

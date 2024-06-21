@@ -3,7 +3,7 @@ use chomp::*;
 use std::io::{stdin, BufRead};
 
 fn main() {
-	let mut chomp_board = BoardState::new(7, 4, true);
+	let mut chomp_board = BoardState::new(7, 4);
 	let (mut best_outcome, mut move_opt) = chomp_board.minimax();
 
 	let mut stdin = stdin().lock();
