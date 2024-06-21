@@ -1,9 +1,10 @@
-use std::cmp::max;
 use std::collections::HashMap;
 use std::sync::RwLock;
 
+type CachedMove = (i32, Option<(usize, usize)>);
+
 lazy_static::lazy_static! {
-	static ref MEMOIZATION_CACHE: RwLock<HashMap<BoardState, i32>> = RwLock::new(HashMap::new());
+	static ref MEMOIZATION_CACHE: RwLock<HashMap<BoardState, CachedMove>> = RwLock::new(HashMap::new());
 }
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -70,26 +71,46 @@ impl BoardState {
 		}
 	}
 
-	pub fn minimax(&self) -> i32 {
+	pub fn minimax(&mut self) -> (i32, Option<(usize, usize)>) {
 		{
-			let cache_reader = MEMOIZATION_CACHE.read().unwrap();
-			if let Some(pre_computed_val) = cache_reader.get(&self) {
-				return *pre_computed_val;
+			let cache = MEMOIZATION_CACHE.read().unwrap();
+			if let Some(&(cached_result, ref best_move)) = cache.get(self) {
+				if let Some((x, y)) = best_move {
+					if self.inner[*x][*y] {
+						// Only if piece was not already eaten!
+						*self = self.do_move(*x, *y);
+						return (cached_result, *best_move);
+					}
+				}
 			}
 		}
+
 		let win_state = self.win_state();
 		if win_state.ended() {
-			return win_state.into();
+			let result: i32 = win_state.into();
+			let mut cache = MEMOIZATION_CACHE.write().unwrap();
+			cache.insert(self.clone(), (result, None));
+			return (result, None);
 		}
 
-		let mut alpha = -1;
-		for mov in self.moves().iter() {
-			alpha = max(alpha, -mov.minimax());
+		let mut best_value = i32::MIN;
+		let mut best_move = None;
+		for ((x, y), mut mov) in self.moves() {
+			let (eval, _) = mov.minimax();
+			let eval = -eval;
+
+			if eval > best_value {
+				best_value = eval;
+				best_move = Some((x, y));
+			}
 		}
 
-		let mut cache_writer = MEMOIZATION_CACHE.write().unwrap();
-		cache_writer.insert(self.clone(), alpha);
-		alpha
+		let mut cache = MEMOIZATION_CACHE.write().unwrap();
+		cache.insert(self.clone(), (best_value, best_move));
+		if let Some((x, y)) = best_move {
+			*self = self.do_move(x, y); // Assume guided player will do the move we say
+		}
+		(best_value, best_move)
 	}
 
 	pub fn do_move(&self, x: usize, y: usize) -> BoardState {
@@ -105,7 +126,7 @@ impl BoardState {
 		new_state
 	}
 
-	pub fn moves(&self) -> Vec<BoardState> {
+	pub fn moves(&self) -> Vec<((usize, usize), BoardState)> {
 		let mut moves = Vec::new();
 		let (width, height) = (self.inner.len(), self.inner[0].len());
 		for x in 0..width {
@@ -114,7 +135,7 @@ impl BoardState {
 					continue; // Skip the poisoned or already-eaten piece
 				}
 
-				moves.push(self.do_move(x, y));
+				moves.push(((x, y), self.do_move(x, y)));
 			}
 		}
 
