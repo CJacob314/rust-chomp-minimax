@@ -1,17 +1,15 @@
 use std::cmp::max;
+use std::collections::HashMap;
+use std::sync::RwLock;
 
+lazy_static::lazy_static! {
+	static ref MEMOIZATION_CACHE: RwLock<HashMap<BoardState, i32>> = RwLock::new(HashMap::new());
+}
+
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct BoardState {
 	inner: Vec<Vec<bool>>,
 	is_max_player: bool,
-}
-
-impl Clone for BoardState {
-	fn clone(&self) -> Self {
-		BoardState {
-			inner: self.inner.clone(),
-			is_max_player: self.is_max_player,
-		}
-	}
 }
 
 pub enum WinState {
@@ -73,6 +71,12 @@ impl BoardState {
 	}
 
 	pub fn minimax(&self) -> i32 {
+		{
+			let cache_reader = MEMOIZATION_CACHE.read().unwrap();
+			if let Some(pre_computed_val) = cache_reader.get(&self) {
+				return *pre_computed_val;
+			}
+		}
 		let win_state = self.win_state();
 		if win_state.ended() {
 			return win_state.into();
@@ -82,6 +86,9 @@ impl BoardState {
 		for mov in self.moves().iter() {
 			alpha = max(alpha, -mov.minimax());
 		}
+
+		let mut cache_writer = MEMOIZATION_CACHE.write().unwrap();
+		cache_writer.insert(self.clone(), alpha);
 		alpha
 	}
 
